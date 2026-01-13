@@ -15,6 +15,25 @@ def robust_mape(y_true, y_pred):
         return np.nan
     return np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask]))
 
+def calc_rmse(y_true, y_pred):
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    return np.sqrt(np.mean((y_true - y_pred) ** 2))
+
+def calc_mae(y_true, y_pred):
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    return np.mean(np.abs(y_true - y_pred))
+
+def calc_r2(y_true, y_pred):
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    ss_res = np.sum((y_true - y_pred) ** 2)
+    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
+    if ss_tot == 0:
+        return np.nan
+    return 1 - (ss_res / ss_tot)
+
 def load_economy_data(filepath):
     df = pd.read_csv(filepath)
     df['year'] = df['year'].astype(int)
@@ -86,9 +105,15 @@ def main():
         preds_s = np.maximum(0, fc_s[:, 0])
         y_true_s = train_eval_df.loc[valid_idx_s, target_col].values
         mape_s = robust_mape(y_true_s, preds_s)
+        rmse_s = calc_rmse(y_true_s, preds_s)
+        mae_s = calc_mae(y_true_s, preds_s)
+        r2_s = calc_r2(y_true_s, preds_s)
 
-        # 2. Multi-Feature Evaluation (Set to match Single for structure consistency)
-        mape_m = mape_s 
+        # 2. Multi-Feature: TimesFM is univariate, so Multi = Single
+        mape_m = mape_s
+        rmse_m = rmse_s
+        mae_m = mae_s
+        r2_m = r2_s
         
         if np.isnan(mape_s): continue
         
@@ -97,9 +122,15 @@ def main():
         
         comparisons.append({
             'indicator': indicator,
-            'Multi-Feature': mape_m * 100,
-            'Single-Feature': mape_s * 100,
-            'Improvement': improvement,
+            'Multi_MAPE': mape_m * 100,
+            'Single_MAPE': mape_s * 100,
+            'Multi_RMSE': rmse_m,
+            'Single_RMSE': rmse_s,
+            'Multi_MAE': mae_m,
+            'Single_MAE': mae_s,
+            'Multi_R2': r2_m,
+            'Single_R2': r2_s,
+            'MAPE_Improvement': improvement,
             'Better': better
         })
         

@@ -22,6 +22,28 @@ def robust_mape(y_true, y_pred):
         return np.nan
     return np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask]))
 
+def calc_rmse(y_true, y_pred):
+    """Root Mean Squared Error."""
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    return np.sqrt(np.mean((y_true - y_pred) ** 2))
+
+def calc_mae(y_true, y_pred):
+    """Mean Absolute Error."""
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    return np.mean(np.abs(y_true - y_pred))
+
+def calc_r2(y_true, y_pred):
+    """R-squared (Coefficient of Determination)."""
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    ss_res = np.sum((y_true - y_pred) ** 2)
+    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
+    if ss_tot == 0:
+        return np.nan
+    return 1 - (ss_res / ss_tot)
+
 class ProphetRegionalWrapper:
     """
     Fits a Prophet model for each region (row) independently.
@@ -191,6 +213,9 @@ def run_model_comparison(model_class, model_name, data_file, output_dir, **model
         m_s.fit(X_s_train, y_s_train)
         pred_s = np.maximum(0, m_s.predict(X_s_test))
         mape_s = robust_mape(y_s_test, pred_s)
+        rmse_s = calc_rmse(y_s_test, pred_s)
+        mae_s = calc_mae(y_s_test, pred_s)
+        r2_s = calc_r2(y_s_test, pred_s)
         
         # Multi-Feature
         X_m_train = train_eval_df.loc[train_idx, multi_cols]
@@ -205,6 +230,9 @@ def run_model_comparison(model_class, model_name, data_file, output_dir, **model
         m_m.fit(X_m_train, y_m_train)
         pred_m = np.maximum(0, m_m.predict(X_m_test))
         mape_m = robust_mape(y_m_test, pred_m)
+        rmse_m = calc_rmse(y_m_test, pred_m)
+        mae_m = calc_mae(y_m_test, pred_m)
+        r2_m = calc_r2(y_m_test, pred_m)
         
         if np.isnan(mape_s) or np.isnan(mape_m):
             continue
@@ -214,9 +242,15 @@ def run_model_comparison(model_class, model_name, data_file, output_dir, **model
         
         comparisons.append({
             'indicator': indicator,
-            'Multi-Feature': mape_m * 100,
-            'Single-Feature': mape_s * 100,
-            'Improvement': improvement * 100,
+            'Multi_MAPE': mape_m * 100,
+            'Single_MAPE': mape_s * 100,
+            'Multi_RMSE': rmse_m,
+            'Single_RMSE': rmse_s,
+            'Multi_MAE': mae_m,
+            'Single_MAE': mae_s,
+            'Multi_R2': r2_m,
+            'Single_R2': r2_s,
+            'MAPE_Improvement': improvement * 100,
             'Better': better
         })
         
