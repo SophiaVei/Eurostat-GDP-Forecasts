@@ -6,9 +6,14 @@ def main():
     DATA_FILE = r'c:\Users\Sofia\Eurostat-GDP-Forecasts\data\economy_nuts2_all_columns.csv'
     OUTPUT_DIR = r'c:\Users\Sofia\Eurostat-GDP-Forecasts\results\xgboost'
     
-    # XGBoost handles NaNs naturally, but we'll use robust settings
+    # Optimized XGBoost parameters for annual economic data
     model_params = {
-        'n_estimators': 100,
+        'n_estimators': 200,
+        'max_depth': 4,
+        'learning_rate': 0.1,
+        'min_child_weight': 3,
+        'subsample': 0.8,
+        'colsample_bytree': 0.8,
         'random_state': 42,
         'objective': 'reg:absoluteerror'
     }
