@@ -85,24 +85,62 @@ class ProphetRegionalWrapper:
     def predict(self, X):
         from prophet import Prophet
         
+        # Identify indicator groups for multi-feature support
+        col_prefixes = {}
+        for col in X.columns:
+            if '_' in col:
+                prefix = '_'.join(col.split('_')[:-1])
+                col_prefixes.setdefault(prefix, []).append(col)
+        
+        target_prefix = self.target_prefix
+        regressor_prefixes = [p for p in col_prefixes.keys() if p != target_prefix]
+
         def fit_predict_single(idx):
             row = X.iloc[idx]
-            data = []
-            for col in X.columns:
-                try:
-                    # Robust year parsing
-                    parts = col.split('_')
-                    year = int(parts[-1])
-                    val = row[col]
-                    if not pd.isna(val) and val != 0:
-                        data.append({'ds': f"{year}-01-01", 'y': val})
-                except:
-                    continue
             
-            df_p = pd.DataFrame(data)
-            if len(df_p) < 2:
+            # Prepare main target data
+            target_data = []
+            if target_prefix and target_prefix in col_prefixes:
+                for col in col_prefixes[target_prefix]:
+                    try:
+                        year = int(col.split('_')[-1])
+                        val = row[col]
+                        if not pd.isna(val) and val != 0:
+                            target_data.append({'ds': f"{year}-01-01", 'y': val})
+                    except: continue
+            else:
+                # Fallback to simple parsing if prefix logic fails
+                for col in X.columns:
+                    try:
+                        year = int(col.split('_')[-1])
+                        val = row[col]
+                        if not pd.isna(val) and val != 0:
+                            target_data.append({'ds': f"{year}-01-01", 'y': val})
+                    except: continue
+
+            df_p = pd.DataFrame(target_data)
+            if len(df_p) < 4:  # Need more points for advanced features
                 return 0
             
+            # Prepare regressors
+            active_regressors = []
+            for rp in regressor_prefixes:
+                reg_vals = []
+                years_present = df_p['ds'].apply(lambda x: x.split('-')[0]).tolist()
+                valid_reg = True
+                for yr_str in years_present:
+                    col_name = f"{rp}_{yr_str}"
+                    if col_name in row and not pd.isna(row[col_name]):
+                        reg_vals.append(row[col_name])
+                    else:
+                        valid_reg = False
+                        break
+                
+                if valid_reg:
+                    reg_col_name = f"reg_{rp}"
+                    df_p[reg_col_name] = reg_vals
+                    active_regressors.append(reg_col_name)
+
             m = Prophet(
                 yearly_seasonality=False, 
                 weekly_seasonality=False, 
@@ -110,15 +148,28 @@ class ProphetRegionalWrapper:
                 changepoint_prior_scale=0.5,
                 n_changepoints=min(12, len(df_p) - 1),
                 growth='linear',
+                uncertainty_samples=500,
                 **self.kwargs
             )
+            
+            # Add custom 8-year business cycle (approx 2922 days)
+            m.add_seasonality(name='business_cycle', period=2922, fourier_order=3)
+            
+            # Add external regressors
+            for reg in active_regressors:
+                m.add_regressor(reg, prior_scale=0.1)
+
             try:
                 m.fit(df_p)
-                # Prophet 1.1.5 uses 'YE' for YearEnd
                 future = m.make_future_dataframe(periods=1, freq='YE')
+                
+                # Fill future regressors with latest value
+                for reg in active_regressors:
+                    future[reg] = df_p[reg].iloc[-1]
+                
                 forecast = m.predict(future)
                 return max(0, forecast.iloc[-1]['yhat'])
-            except:
+            except Exception as e:
                 return 0
 
         results = Parallel(n_jobs=4)(delayed(fit_predict_single)(i) for i in range(len(X)))

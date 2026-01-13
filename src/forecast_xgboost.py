@@ -6,11 +6,13 @@ def main():
     DATA_FILE = r'c:\Users\Sofia\Eurostat-GDP-Forecasts\data\economy_nuts2_all_columns.csv'
     OUTPUT_DIR = r'c:\Users\Sofia\Eurostat-GDP-Forecasts\results\xgboost'
     
-    # Optimized XGBoost parameters for annual economic data
+    # Advanced XGBoost parameters for Phase 2 optimization
     model_params = {
-        'n_estimators': 200,
+        'n_estimators': 500,        # Increased trees for better depth
         'max_depth': 4,
-        'learning_rate': 0.1,
+        'learning_rate': 0.05,     # Smaller learning rate for stability
+        'gamma': 0.5,              # Minimum loss reduction for a split
+        'reg_lambda': 1.5,         # L2 regularization
         'min_child_weight': 3,
         'subsample': 0.8,
         'colsample_bytree': 0.8,
