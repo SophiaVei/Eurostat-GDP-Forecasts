@@ -28,8 +28,7 @@ Unlike standard per-series time-series forecasting, we train a single model inst
 ## Models Evaluated
 - **Linear Regression**: Standard multivariate regression.
 - **XGBoost**: Gradient boosted trees optimized for tabular patterns.
-- **Prophet (Regional)**: Individual Prophet models fitted per region in a parallel loop.
-- **Ensemble**: A weighted average of Linear, XGBoost, and Prophet predictions.
+- **Ensemble**: A weighted average of Linear and XGBoost predictions.
 - **TimesFM**: Google's 2.5B parameter zero-shot time-series foundation model.
 
 ## Results Structure

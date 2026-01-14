@@ -2,7 +2,6 @@ pandas
 numpy
 matplotlib
 scikit-learn
-prophet
 xgboost
 timesfm
 joblib

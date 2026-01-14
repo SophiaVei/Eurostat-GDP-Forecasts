@@ -12,8 +12,7 @@ import logging
 import matplotlib.pyplot as plt
 from joblib import Parallel, delayed
 
-# Suppress prophet logs
-logging.getLogger('prophet').setLevel(logging.ERROR)
+# Suppress cmdstanpy logs (if any Stan-based models are used in the future)
 logging.getLogger('cmdstanpy').setLevel(logging.ERROR)
 
 def robust_mape(y_true, y_pred):
@@ -47,114 +46,6 @@ def calc_r2(y_true, y_pred):
         return np.nan
     return 1 - (ss_res / ss_tot)
 
-
-class ProphetRegionalWrapper:
-    """Fits a Prophet model for each region (row) independently with optimized parameters."""
-    def __init__(self, target_prefix=None, **kwargs):
-        self.target_prefix = target_prefix
-        # Filter Prophet params
-        prophet_params = ['growth', 'changepoints', 'n_changepoints', 'changepoint_range',
-                          'yearly_seasonality', 'weekly_seasonality', 'daily_seasonality',
-                          'holidays', 'seasonality_mode', 'seasonality_prior_scale',
-                          'holidays_prior_scale', 'changepoint_prior_scale', 'mcmc_samples',
-                          'interval_width', 'uncertainty_samples', 'stan_backend']
-        self.kwargs = {k: v for k, v in kwargs.items() if k in prophet_params}
-
-    def fit(self, X, y):
-        return self
-
-    def predict(self, X):
-        from prophet import Prophet
-        
-        # Identify indicator groups for multi-feature support
-        col_prefixes = {}
-        for col in X.columns:
-            if '_' in col:
-                prefix = '_'.join(col.split('_')[:-1])
-                col_prefixes.setdefault(prefix, []).append(col)
-        
-        target_prefix = self.target_prefix
-        regressor_prefixes = [p for p in col_prefixes.keys() if p != target_prefix]
-
-        def fit_predict_single(idx):
-            row = X.iloc[idx]
-            
-            # Prepare main target data
-            target_data = []
-            if target_prefix and target_prefix in col_prefixes:
-                for col in col_prefixes[target_prefix]:
-                    try:
-                        year = int(col.split('_')[-1])
-                        val = row[col]
-                        if not pd.isna(val) and val != 0:
-                            target_data.append({'ds': f"{year}-01-01", 'y': val})
-                    except: continue
-            else:
-                # Fallback to simple parsing if prefix logic fails
-                for col in X.columns:
-                    try:
-                        year = int(col.split('_')[-1])
-                        val = row[col]
-                        if not pd.isna(val) and val != 0:
-                            target_data.append({'ds': f"{year}-01-01", 'y': val})
-                    except: continue
-
-            df_p = pd.DataFrame(target_data)
-            if len(df_p) < 4:  # Need more points for advanced features
-                return 0
-            
-            # Prepare regressors
-            active_regressors = []
-            for rp in regressor_prefixes:
-                reg_vals = []
-                years_present = df_p['ds'].apply(lambda x: x.split('-')[0]).tolist()
-                valid_reg = True
-                for yr_str in years_present:
-                    col_name = f"{rp}_{yr_str}"
-                    if col_name in row and not pd.isna(row[col_name]):
-                        reg_vals.append(row[col_name])
-                    else:
-                        valid_reg = False
-                        break
-                
-                if valid_reg:
-                    reg_col_name = f"reg_{rp}"
-                    df_p[reg_col_name] = reg_vals
-                    active_regressors.append(reg_col_name)
-
-            m = Prophet(
-                yearly_seasonality=False, 
-                weekly_seasonality=False, 
-                daily_seasonality=False,
-                changepoint_prior_scale=0.5,
-                n_changepoints=min(12, len(df_p) - 1),
-                growth='linear',
-                uncertainty_samples=500,
-                **self.kwargs
-            )
-            
-            # Add custom 8-year business cycle (approx 2922 days)
-            m.add_seasonality(name='business_cycle', period=2922, fourier_order=3)
-            
-            # Add external regressors
-            for reg in active_regressors:
-                m.add_regressor(reg, prior_scale=0.1)
-
-            try:
-                m.fit(df_p)
-                future = m.make_future_dataframe(periods=1, freq='YE')
-                
-                # Fill future regressors with latest value
-                for reg in active_regressors:
-                    future[reg] = df_p[reg].iloc[-1]
-                
-                forecast = m.predict(future)
-                return max(0, forecast.iloc[-1]['yhat'])
-            except Exception as e:
-                return 0
-
-        results = Parallel(n_jobs=4)(delayed(fit_predict_single)(i) for i in range(len(X)))
-        return np.array(results)
 
 class TimesFMRegionalWrapper:
     """Fits TimesFM for each region independently."""
@@ -197,7 +88,7 @@ class TimesFMRegionalWrapper:
         return point_forecast[:, 0]
 
 class EnsembleRegionalWrapper:
-    """Weighted ensemble of Ridge, XGBoost, and Prophet."""
+    """Weighted ensemble of Ridge and XGBoost."""
     def __init__(self, target_prefix=None, **kwargs):
         from sklearn.linear_model import Ridge
         import xgboost as xgb
@@ -209,22 +100,19 @@ class EnsembleRegionalWrapper:
             random_state=42,
             objective='reg:absoluteerror'
         )
-        self.m_prophet = ProphetRegionalWrapper(target_prefix=target_prefix)
-        self.weights = [0.4, 0.4, 0.2] 
+        self.weights = [0.5, 0.5]  # Equal weights for Linear and XGBoost
 
     def fit(self, X, y):
         X_imp = impute_missing_values(X)
         self.m_linear.fit(X_imp, y)
         self.m_xgb.fit(X_imp, y)
-        self.m_prophet.fit(X, y)
         return self
 
     def predict(self, X):
         X_imp = impute_missing_values(X)
         p_linear = np.maximum(0, self.m_linear.predict(X_imp))
         p_xgb = np.maximum(0, self.m_xgb.predict(X_imp))
-        p_prophet = self.m_prophet.predict(X)
-        return self.weights[0] * p_linear + self.weights[1] * p_xgb + self.weights[2] * p_prophet
+        return self.weights[0] * p_linear + self.weights[1] * p_xgb
 
 def run_model_comparison(model_class, model_name, data_file, output_dir, **model_kwargs):
     """Standardized loop to compare Single vs Multi features for a given model class."""
@@ -255,7 +143,7 @@ def run_model_comparison(model_class, model_name, data_file, output_dir, **model
         
         # Instantiate model. Only pass target_prefix if the class accepts it.
         # Check if it is one of our custom wrappers
-        if model_class in [ProphetRegionalWrapper, TimesFMRegionalWrapper, EnsembleRegionalWrapper]:
+        if model_class in [TimesFMRegionalWrapper, EnsembleRegionalWrapper]:
             m_s = model_class(target_prefix=indicator, **model_kwargs)
             m_m = model_class(target_prefix=indicator, **model_kwargs)
         else:
