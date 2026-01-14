@@ -92,8 +92,17 @@ def prepare_indicator_dataset(wide_df, target_indicator, target_year=2023):
         c for c in wide_df.columns if not c.endswith(str(target_year)) and c != "geo"
     ]
 
-    # X_single: just target_indicator history
-    single_feature_cols = [c for c in feature_cols if c.startswith(target_indicator + "_")]
+    # X_single: just target_indicator history (exact match, not sub-indicators)
+    # Match columns like "gva_2008" but NOT "gva_sector_a_2008"
+    # The pattern should be: {target_indicator}_{year} where year is numeric
+    single_feature_cols = []
+    prefix = target_indicator + "_"
+    for c in feature_cols:
+        if c.startswith(prefix):
+            # Remove the prefix and check if what remains is just a year
+            remainder = c[len(prefix):]
+            if remainder.isdigit():  # If remainder is just digits, it's a year - this is the exact indicator
+                single_feature_cols.append(c)
 
     return train_eval_df, forecast_df, {
         "single": single_feature_cols,
