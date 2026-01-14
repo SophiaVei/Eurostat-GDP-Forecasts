@@ -3,10 +3,18 @@ import timesfm
 import pandas as pd
 import numpy as np
 import os
+from pathlib import Path
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
+from data_processor import (
+    load_wide_data,
+    prepare_indicator_dataset,
+    get_base_indicators_from_wide,
+    impute_missing_values,
+    preprocess_to_wide_file,
+)
 
-# Local utility to avoid importing from forecast_utils which has conflicting imports
+# Shared metric functions (same as forecast_utils for consistency)
 def robust_mape(y_true, y_pred):
     y_true = np.array(y_true)
     y_pred = np.array(y_pred)
@@ -34,34 +42,19 @@ def calc_r2(y_true, y_pred):
         return np.nan
     return 1 - (ss_res / ss_tot)
 
-def load_economy_data(filepath):
-    df = pd.read_csv(filepath)
-    df['year'] = df['year'].astype(int)
-    return df
-
-def get_indicators(df):
-    metadata_cols = ['geo', 'year', 'geo_label', 'nuts_level', 'country_code', 'country_name', 'is_el_regional_unit']
-    return [c for c in df.columns if c not in metadata_cols]
-
-def pivot_to_wide(df):
-    indicators = get_indicators(df)
-    wide_df = df.pivot(index='geo', columns='year', values=indicators)
-    wide_df.columns = [f"{ind}_{yr}" for ind, yr in wide_df.columns]
-    return wide_df.reset_index()
-
-def prepare_indicator_dataset(wide_df, target_indicator, target_year=2023):
-    target_col = f"{target_indicator}_{target_year}"
-    if target_col not in wide_df.columns:
-        return None, None, None
-    train_eval_df = wide_df[wide_df[target_col].notna()].copy()
-    forecast_df = wide_df[wide_df[target_col].isna()].copy()
-    feature_cols = [c for c in wide_df.columns if not c.endswith(str(target_year)) and c != 'geo']
-    single_feature_cols = [c for c in feature_cols if c.startswith(target_indicator + "_")]
-    return train_eval_df, forecast_df, {'single': single_feature_cols, 'multi': feature_cols, 'target': target_col}
-
 def main():
-    DATA_FILE = r'c:\Users\Sofia\Eurostat-GDP-Forecasts\data\economy_nuts2_all_columns.csv'
-    OUTPUT_DIR = r'c:\Users\Sofia\Eurostat-GDP-Forecasts\results\timesfm'
+    # Use relative paths from script location
+    SCRIPT_DIR = Path(__file__).resolve().parent
+    REPO_DIR = SCRIPT_DIR.parent
+    
+    RAW_FILE = REPO_DIR / "data" / "economy_nuts2_all_columns.csv"
+    WIDE_FILE = REPO_DIR / "data" / "economy_nuts2_wide.csv"
+    OUTPUT_DIR = REPO_DIR / "results" / "timesfm"
+    
+    # Ensure preprocessed wide file exists
+    if not WIDE_FILE.exists():
+        print(f"Preprocessing raw data to wide format: {WIDE_FILE}")
+        preprocess_to_wide_file(str(RAW_FILE), str(WIDE_FILE))
     
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     plots_dir = os.path.join(OUTPUT_DIR, 'plots')
@@ -71,9 +64,9 @@ def main():
     model = timesfm.TimesFM_2p5_200M_torch.from_pretrained("google/timesfm-2.5-200m-pytorch")
     model.compile(timesfm.ForecastConfig(max_context=128, max_horizon=1, normalize_inputs=True, use_continuous_quantile_head=True))
     
-    df = load_economy_data(DATA_FILE)
-    wide_df = pivot_to_wide(df)
-    indicators = get_indicators(df)
+    # Load preprocessed wide-format data (same as all other models)
+    wide_df = load_wide_data(str(WIDE_FILE))
+    indicators = get_base_indicators_from_wide(wide_df)
     
     comparisons = []
     final_forecasts = []
@@ -88,13 +81,17 @@ def main():
         
         # Consistent Split: 80/20 with random_state=42
         train_idx, test_idx = train_test_split(train_eval_df.index, test_size=0.2, random_state=42)
-        test_rows = train_eval_df.loc[test_idx]
+        
+        # Apply shared imputation to single-feature columns (same preprocessing as other models)
+        X_single_imputed = impute_missing_values(train_eval_df[single_cols])
         
         # 1. Single-Feature Evaluation (Univariate)
+        # Use imputed values to build time series for TimesFM
         inputs_s = []
         valid_idx_s = []
-        for idx, row in test_rows.iterrows():
-            series = [row[c] for c in single_cols if not pd.isna(row[c])]
+        for idx in test_idx:
+            # Extract imputed series (all values should be non-NaN after imputation)
+            series = X_single_imputed.loc[idx, single_cols].values.tolist()
             if len(series) > 0:
                 inputs_s.append(np.array(series))
                 valid_idx_s.append(idx)
@@ -136,10 +133,14 @@ def main():
         
         # Forecast missing
         if not forecast_df.empty:
+            # Apply shared imputation to forecast data
+            X_fc_imputed = impute_missing_values(forecast_df[single_cols])
+            
             fc_inputs = []
             valid_fc_geos = []
-            for _, row in forecast_df.iterrows():
-                series = [row[c] for c in single_cols if not pd.isna(row[c])]
+            for idx, row in forecast_df.iterrows():
+                # Extract imputed series
+                series = X_fc_imputed.loc[idx, single_cols].values.tolist()
                 if len(series) > 0:
                     fc_inputs.append(np.array(series))
                     valid_fc_geos.append(row['geo'])
@@ -161,7 +162,8 @@ def main():
         for i, idx in enumerate(sample_indices):
             row = train_eval_df.loc[idx]
             hist_years = [int(c.split('_')[-1]) for c in single_cols]
-            hist_vals = [row[c] for c in single_cols]
+            # Use imputed values for plotting (consistent with what TimesFM sees)
+            hist_vals = X_single_imputed.loc[idx, single_cols].values.tolist()
             pred_2023 = preds_s[i]
             actual_2023 = row[target_col]
             

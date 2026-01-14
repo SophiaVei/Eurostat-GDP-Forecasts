@@ -2,7 +2,12 @@ import pandas as pd
 import numpy as np
 import os
 from sklearn.model_selection import train_test_split
-from data_processor import load_economy_data, pivot_to_wide, prepare_indicator_dataset, get_indicators
+from data_processor import (
+    load_wide_data,
+    prepare_indicator_dataset,
+    get_base_indicators_from_wide,
+    impute_missing_values,
+)
 import logging
 import matplotlib.pyplot as plt
 from joblib import Parallel, delayed
@@ -42,30 +47,6 @@ def calc_r2(y_true, y_pred):
         return np.nan
     return 1 - (ss_res / ss_tot)
 
-def impute_missing_values(X):
-    """
-    Fills NaNs and 0s with the mean of the available values for each indicator in that specific row.
-    0s are treated as missing values per user request.
-    Optimized to use vectorized operations where possible.
-    """
-    X = X.copy()
-    X = X.replace(0, np.nan)
-    
-    # Get indicator groups
-    col_prefixes = {}
-    for col in X.columns:
-        if '_' in col:
-            prefix = '_'.join(col.split('_')[:-1])
-            col_prefixes.setdefault(prefix, []).append(col)
-    
-    # Fill row-wise mean for each indicator group
-    for prefix, cols in col_prefixes.items():
-        row_means = X[cols].mean(axis=1)
-        # For each column in this group, fill NaNs with the calculated row means
-        X[cols] = X[cols].apply(lambda x: x.fillna(row_means))
-    
-    # Final fallback for cases where entire rows are NaN for an indicator
-    return X.fillna(0)
 
 class ProphetRegionalWrapper:
     """Fits a Prophet model for each region (row) independently with optimized parameters."""
@@ -253,9 +234,9 @@ def run_model_comparison(model_class, model_name, data_file, output_dir, **model
     plots_dir = os.path.join(output_dir, 'plots')
     os.makedirs(plots_dir, exist_ok=True)
     
-    df = load_economy_data(data_file)
-    wide_df = pivot_to_wide(df)
-    indicators = get_indicators(df)
+    # Load preprocessed wide-format data (all models use the same preprocessed file)
+    wide_df = load_wide_data(data_file)
+    indicators = get_base_indicators_from_wide(wide_df)
     
     comparisons = []
     final_forecasts = []
