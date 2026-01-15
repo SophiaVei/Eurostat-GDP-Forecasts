@@ -2,12 +2,7 @@ import os
 from pathlib import Path
 import sys
 
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-from sklearn.model_selection import train_test_split
-
-# Try to import timesfm, but handle import errors gracefully
+# Move torch/timesfm import to the top to avoid DLL conflicts with numpy/sklearn (WinError 1114)
 try:
     import timesfm
     TIMESFM_AVAILABLE = True
@@ -16,6 +11,11 @@ except (ImportError, OSError) as e:
     print("TimesFM requires PyTorch. Install PyTorch or use other models (linear, xgboost, ensemble).")
     TIMESFM_AVAILABLE = False
     timesfm = None
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
 
 # Ensure parent src directory is on sys.path so we can import shared modules
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -65,6 +65,10 @@ def calc_r2(y_true, y_pred):
 
 
 def main():
+    if not TIMESFM_AVAILABLE:
+        print("Skipping TimesFM forecast because the library could not be imported.")
+        return
+
     # Resolve paths relative to repo root
     script_dir = Path(__file__).resolve().parent          # .../src/tourism
     repo_dir = script_dir.parent.parent                   # repo root
@@ -86,10 +90,6 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
     plots_dir = os.path.join(output_dir, "plots")
     os.makedirs(plots_dir, exist_ok=True)
-
-    if not TIMESFM_AVAILABLE:
-        print("TimesFM not available, skipping.")
-        return
 
     print("Loading TimesFM...")
     model = timesfm.TimesFM_2p5_200M_torch.from_pretrained(
