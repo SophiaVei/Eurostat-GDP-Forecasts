@@ -1,76 +1,53 @@
-# API Usage Instructions
+# API Operational Instructions
 
-## 1. Setup
-Make sure you have MongoDB running locally. The API will connect to:
-- **Database**: `skillscapes`
-- **Collections**: `economy`, `labour`, `tourism`, `greek_tourism`
+## 1. Environment Activation
+The forecasting service requires a connection to a MongoDB instance. 
 
-### Option A: Manual Setup (Local Python)
-Open a terminal in the root folder (`Eurostat-GDP-Forecasts`) and run:
+### Option A: Local Deployment
+Ensure MongoDB is running locally, then execute the following from the root directory:
 ```powershell
 python -m API.main
 ```
 
-### Option B: Using Docker (Recommended)
-If you have Docker installed, run this single command to start the API and a fresh MongoDB database automatically:
+### Option B: Docker Deployment (Containerized)
+The following command initializes both the API and a dedicated MongoDB container:
 ```powershell
 docker-compose up --build
 ```
-*(The API will be available at http://localhost:8000)*
 
-## 3. Workflow Steps
+## 2. Standard Workflow
 
-### Step A: Update Data (Monthly)
-This command triggers the "ETL" process:
-1.  Downloads latest data from Eurostat.
-2.  Saves raw historical data into the `skillscapes` database, organized by collection (e.g. `economy`).
-3.  Each document is marked with `type: "history"`.
-
-**Run Command (PowerShell):**
+### Phase 1: Data Synchronization
+Refreshes the historical database with the latest available data through the Skillscapes API.
 ```powershell
 curl -X POST http://localhost:8000/data/update
 ```
-*(Or navigate to http://localhost:8000/docs and click "Try it out" on `/data/update`)*
+Historical records are stored with the attribute `type: "history"`.
 
-### Step B: Forecast (Monthly)
-This command triggers the prediction engine:
-1.  Loads the pretrained models from `API/models/`.
-2.  Reads the "history" data from MongoDB.
-3.  Predicts the next year (e.g. 2025).
-4.  Saves the results into the **same** collections, marked with `type: "forecast"`.
-
-**Run Command (PowerShell):**
+### Phase 2: Generating Forecasts
+Runs inference using pre-trained models. This step populates the database with predictions for the next logical year.
 ```powershell
 curl -X POST http://localhost:8000/forecast/run
 ```
+Predictions are stored with the attribute `type: "forecast"`.
 
-### Step C: View Results (API)
-Instead of checking MongoDB directly, you can now view the results via the API:
-- To see all labour forecasts: `http://localhost:8000/forecast/labour`
-- To see a specific indicator: `http://localhost:8000/forecast/labour/labour_force`
+### Phase 3: Data Access
+Forecasts can be retrieved via standard GET requests:
+- **Domain Level**: `GET http://localhost:8000/forecast/labour`
+- **Indicator Level**: `GET http://localhost:8000/forecast/labour/labour_force`
 
-**Run Command (PowerShell):**
-```powershell
-curl http://localhost:8000/forecast/labour
+## 3. Database Schema Reference
+The MongoDB `skillscapes` database contains domain-specific collections. A typical forecast document follows this structure:
+
+```json
+{
+  "geo": "EL52",
+  "type": "forecast",
+  "indicator": "labour_force",
+  "year": 2025,
+  "value": 123.45,
+  "model": "Ensemble",
+  "run_at": "2026-01-15T..."
+}
 ```
-
-## 4. Viewing Results (MongoDB Compass)
-1.  Open **MongoDB Compass**.
-2.  Connect to `local` (default).
-3.  Find the database named **`skillscapes`**.
-4.  Click on a collection, for example **`labour`**.
-5.  You will see documents. You can filter them:
-    - To see history: `{ "type": "history" }`
-    - To see forecasts: `{ "type": "forecast" }`
-6.  A forecast document looks like:
-    ```json
-    {
-      "geo": "EL52",
-      "type": "forecast",
-      "indicator": "labour_force",
-      "year": 2025,
-      "value": 123.45,
-      "model": "Ensemble",
-      "run_at": "2026-01-15T..."
-    }
-    ```
+Records can be inspected directly through MongoDB Compass for manual verification.
