@@ -109,7 +109,7 @@ def main():
     plot_data_dict = {}
 
     for indicator in indicators:
-        train_eval_df, forecast_df, col_info = prepare_indicator_dataset(
+        train_eval_df, forecast_df, col_info, target_year = prepare_indicator_dataset(
             wide_df, indicator
         )
         if train_eval_df is None or len(train_eval_df) < 5:
@@ -199,7 +199,8 @@ def main():
                         {
                             "geo": valid_fc_geos[i],
                             "indicator": indicator,
-                            "forecast_2023": val,
+                            "forecast_year": target_year,
+                            "forecast_value": val,
                             "model_used": "Single (Univariate)",
                         }
                     )
@@ -212,8 +213,8 @@ def main():
             hist_years = [int(c.split("_")[-1]) for c in single_cols]
             # Use imputed values for plotting (consistent with what TimesFM sees)
             hist_vals = X_single_imputed.loc[idx, single_cols].values.tolist()
-            pred_2023 = preds_s[i]
-            actual_2023 = row[target_col]
+            pred_val = preds_s[i]
+            actual_val = row[target_col]
 
             if indicator not in plot_data_dict:
                 plot_data_dict[indicator] = []
@@ -222,8 +223,9 @@ def main():
                     "geo": row["geo"],
                     "hist_years": hist_years,
                     "hist_vals": hist_vals,
-                    "actual_2023": actual_2023,
-                    "pred_2023": pred_2023,
+                    "actual_year": target_year,
+                    "actual_val": actual_val,
+                    "pred_val": pred_val,
                     "better": "Univariate",
                 }
             )
@@ -233,8 +235,11 @@ def main():
         os.path.join(output_dir, "indicator_comparison.csv"), index=False
     )
     if final_forecasts:
+        # Use target_year from the loop (note: assumes mostly same year, but file might be mixed if indicators vary)
+        # We'll just name it based on the last target_year or generic
+        fname = f"forecasts_{target_year}.csv" if target_year else "forecasts.csv"
         pd.DataFrame(final_forecasts).to_csv(
-            os.path.join(output_dir, "forecasts_2023.csv"), index=False
+            os.path.join(output_dir, fname), index=False
         )
 
     # Generate Plots
@@ -242,26 +247,27 @@ def main():
     for indicator, regions in plot_data_dict.items():
         plt.figure(figsize=(15, 10))
         for i, reg in enumerate(regions):
+            t_year = reg.get('actual_year', 2023)
             plt.subplot(len(regions), 1, i + 1)
             plt.plot(reg["hist_years"], reg["hist_vals"], marker="o", label="History")
-            if not pd.isna(reg["actual_2023"]):
+            if not pd.isna(reg["actual_val"]):
                 plt.scatter(
-                    [2023],
-                    [reg["actual_2023"]],
+                    [t_year],
+                    [reg["actual_val"]],
                     color="green",
                     s=100,
-                    label="Actual 2023",
+                    label=f"Actual {t_year}",
                 )
             plt.scatter(
-                [2023],
-                [reg["pred_2023"]],
+                [t_year],
+                [reg["pred_val"]],
                 color="red",
                 marker="X",
                 s=150,
-                label="TimesFM 2023",
+                label=f"TimesFM {t_year}",
             )
             plt.title(f"{indicator} - {reg['geo']} (Model: timesfm, economy)")
-            plt.xticks(reg["hist_years"] + [2023])
+            plt.xticks(reg["hist_years"] + [t_year])
             plt.grid(True, alpha=0.3)
             if i == 0:
                 plt.legend()

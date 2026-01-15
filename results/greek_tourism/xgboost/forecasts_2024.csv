@@ -1,0 +1,5 @@
+geo,indicator,forecast_year,forecast_value,model_used
+EL42,short_stay_total_arrivals,2024,152588.42,Single
+EL42,short_stay_total_arrivals_per_km2,2024,2.1011288,Single
+EL42,short_stay_total_arrivals_per_person,2024,0.45033562,Single
+EL42,short_stay_total_overnights,2024,553212.9,Single

@@ -131,7 +131,7 @@ def run_model_comparison(model_class, model_name, data_file, output_dir, **model
     plot_data_dict = {}
 
     for indicator in indicators:
-        train_eval_df, forecast_df, col_info = prepare_indicator_dataset(wide_df, indicator)
+        train_eval_df, forecast_df, col_info, target_year = prepare_indicator_dataset(wide_df, indicator)
         if train_eval_df is None or len(train_eval_df) < 5:
             continue
             
@@ -198,11 +198,32 @@ def run_model_comparison(model_class, model_name, data_file, output_dir, **model
             X_fc = impute_missing_values(forecast_df[best_cols])
             forecast_vals = np.maximum(0, best_model.predict(X_fc))
             
+            # Static Data Fix: If history is constant, the forecast should likely be that constant.
+            # We check the single-feature history for each region.
+            for i in range(len(forecast_vals)):
+                # Get history for this specific region
+                geo_val = forecast_df.iloc[i]['geo']
+                if geo_val in train_eval_df['geo'].values:
+                    # Find corresponding training row (history)
+                    # Note: This lookup is a bit expensive but safe.
+                    hist_row = train_eval_df[train_eval_df['geo'] == geo_val]
+                    if not hist_row.empty:
+                         # Extract single-feature history (most reliable for "constant-ness")
+                         hist_series = hist_row.iloc[0][single_cols].astype(float)
+                         if hist_series.std() < 1e-6: # Effectively zero variance
+                             last_val = hist_series.iloc[-1]
+                             # If model forecast deviates significantly from this constant, override it
+                             # But only override if it's "very" constant? No, if std is 0, it IS constant.
+                             # Let's override.
+                             forecast_vals[i] = last_val
+                             better = "Static_Correction" # Mark this for debugging info if needed
+
             for i, val in enumerate(forecast_vals):
                 final_forecasts.append({
                     'geo': forecast_df.iloc[i]['geo'],
                     'indicator': indicator,
-                    'forecast_2023': val,
+                    'forecast_year': target_year,
+                    'forecast_value': val,
                     'model_used': better
                 })
         
@@ -214,27 +235,28 @@ def run_model_comparison(model_class, model_name, data_file, output_dir, **model
                 geo = region_row['geo']
                 hist_years = [int(c.split('_')[-1]) for c in single_cols]
                 hist_vals = [region_row[c] for c in single_cols]
-                actual_2023 = region_row[target_col]
+                actual_val = region_row[target_col]
                 
                 best_model = m_m if better == "Multi" else m_s
                 best_cols = multi_cols if better == "Multi" else single_cols
                 X_p = region_row[best_cols].to_frame().T
                 X_p_imp = impute_missing_values(X_p)
-                pred_2023 = np.maximum(0, best_model.predict(X_p_imp))[0]
+                pred_val = np.maximum(0, best_model.predict(X_p_imp))[0]
                 
                 if indicator not in plot_data_dict:
                     plot_data_dict[indicator] = []
                 
                 plot_data_dict[indicator].append({
                     'geo': geo, 'hist_years': hist_years, 'hist_vals': hist_vals,
-                    'actual_2023': actual_2023, 'pred_2023': pred_2023, 'better': better
+                    'actual_year': target_year, 'actual_val': actual_val, 
+                    'pred_val': pred_val, 'better': better
                 })
 
     # Save CSVs
     comp_df = pd.DataFrame(comparisons)
     comp_df.to_csv(os.path.join(output_dir, 'indicator_comparison.csv'), index=False)
     if final_forecasts:
-        pd.DataFrame(final_forecasts).to_csv(os.path.join(output_dir, 'forecasts_2023.csv'), index=False)
+        pd.DataFrame(final_forecasts).to_csv(os.path.join(output_dir, f'forecasts_{target_year}.csv'), index=False)
     
     # Plots
     print(f"Generating optimized plots for {model_name}...")
@@ -242,11 +264,12 @@ def run_model_comparison(model_class, model_name, data_file, output_dir, **model
         if not regions: continue
         plt.figure(figsize=(15, 12))
         for i, reg in enumerate(regions):
+            t_year = reg.get('actual_year', 2023)
             plt.subplot(len(regions), 1, i+1)
             plt.plot(reg['hist_years'], reg['hist_vals'], marker='o', label='History')
-            if not pd.isna(reg['actual_2023']):
-                plt.scatter([2023], [reg['actual_2023']], color='green', s=100, label='Actual 2023', zorder=5)
-            plt.scatter([2023], [reg['pred_2023']], color='red', s=150, marker='X', label=f'Forecast 2023 ({reg["better"]})', zorder=6)
+            if not pd.isna(reg['actual_val']):
+                plt.scatter([t_year], [reg['actual_val']], color='green', s=100, label=f'Actual {t_year}', zorder=5)
+            plt.scatter([t_year], [reg['pred_val']], color='red', s=150, marker='X', label=f'Forecast {t_year} ({reg["better"]})', zorder=6)
             plt.title(f"{indicator} - {reg['geo']} (Model: {model_name})")
             plt.grid(True, alpha=0.3)
             if i == 0: plt.legend()
