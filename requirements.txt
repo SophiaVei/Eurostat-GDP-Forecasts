@@ -3,5 +3,10 @@ numpy
 matplotlib
 scikit-learn
 xgboost
-timesfm
 joblib
+fastapi
+uvicorn
+pymongo
+requests
+timesfm
+# timesfm is heavy - keep that in mind

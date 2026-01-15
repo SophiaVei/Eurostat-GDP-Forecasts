@@ -23,8 +23,13 @@ Start the server:
 # Run from root directory
 python -m API.main
 ```
+
+## 3. Deployment with Docker (Easiest)
+If you have Docker installed, you can start everything (including MongoDB) with a single command:
+```bash
+docker-compose up --build
+```
 The API will be available at `http://localhost:8000`.
-Docs: `http://localhost:8000/docs`
 
 ## 4. Usage
 ### Step 1: Update Data (Monthly)

@@ -5,12 +5,18 @@ Make sure you have MongoDB running locally. The API will connect to:
 - **Database**: `skillscapes`
 - **Collections**: `economy`, `labour`, `tourism`, `greek_tourism`
 
-## 2. Running the API
+### Option A: Manual Setup (Local Python)
 Open a terminal in the root folder (`Eurostat-GDP-Forecasts`) and run:
 ```powershell
 python -m API.main
 ```
-You will see logs indicating the server started at `http://0.0.0.0:8000`.
+
+### Option B: Using Docker (Recommended)
+If you have Docker installed, run this single command to start the API and a fresh MongoDB database automatically:
+```powershell
+docker-compose up --build
+```
+*(The API will be available at http://localhost:8000)*
 
 ## 3. Workflow Steps
 
