@@ -19,7 +19,6 @@ docker-compose up --build
 
 ## 2. Standard Workflow
 
-The API is **fully automated**. There is no need for manual data synchronization or database updates.
 
 ### Step 1: Discover Available Models
 Check the metadata endpoint to see which indicators are supported for each domain.
