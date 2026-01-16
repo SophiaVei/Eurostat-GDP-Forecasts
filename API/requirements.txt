@@ -1,0 +1,13 @@
+pandas
+numpy
+matplotlib
+scikit-learn
+xgboost
+joblib
+fastapi
+uvicorn
+pymongo
+requests
+timesfm
+apscheduler
+# timesfm is heavy - keep that in mind

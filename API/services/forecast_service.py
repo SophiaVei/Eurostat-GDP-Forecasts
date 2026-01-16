@@ -1,9 +1,10 @@
 import joblib
 import pandas as pd
 import numpy as np
+import datetime
 from pathlib import Path
 import sys
-from ..database import get_database
+from database import get_database
 
 try:
     import timesfm
@@ -11,9 +12,9 @@ try:
 except (ImportError, OSError):
     TIMESFM_AVAILABLE = False
 
-# Import src/forecast_utils Wrapper
+# Import internal Wrapper
 CURRENT_DIR = Path(__file__).resolve().parent
-SRC_DIR = CURRENT_DIR.parent.parent / "src"
+SRC_DIR = CURRENT_DIR.parent / "src_shared"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
@@ -26,11 +27,14 @@ def run_forecasts():
     db = get_database()
     datasets_collection = db["datasets"]
     forecasts_collection = db["forecasts"]
-    models_dir = SRC_DIR.parent / "API" / "models"
+    models_dir = CURRENT_DIR.parent / "models"
     
     # Iterate pickles
     model_files = list(models_dir.glob("*.pkl"))
     results = []
+    skipped = []
+    
+    print(f"Starting forecast run for {len(model_files)} indicators...")
     
     for model_path in model_files:
         try:
@@ -59,6 +63,8 @@ def run_forecasts():
             cursor = collection.find({"type": "history"})
             start_docs = list(cursor)
             if not start_docs:
+                print(f"Skipping {indicator}: No historical data found in collection '{domain}'.")
+                skipped.append(f"{indicator} (Missing {domain} data)")
                 continue
                 
             rows = []
@@ -151,7 +157,7 @@ def run_forecasts():
                     "year": int(forecast_year),
                     "value": float(val),
                     "model": data['model_name'],
-                    "run_at": pd.Timestamp.now()
+                    "run_at": datetime.datetime.now(datetime.timezone.utc)
                 })
             
             if new_docs:
@@ -162,7 +168,13 @@ def run_forecasts():
             print(f"Error processing {model_path.name}: {e}")
             continue
 
-    return {"status": "success", "summary": results}
+    return {
+        "status": "success", 
+        "summary": results,
+        "skipped": skipped,
+        "total_processed": len(results),
+        "total_skipped": len(skipped)
+    }
 
 def get_forecasts(domain: str, indicator: str = None):
     """
@@ -184,3 +196,46 @@ def get_forecasts(domain: str, indicator: str = None):
         "count": len(results),
         "data": results
     }
+
+def get_api_metadata():
+    """
+    Scans the API/models directory to identify all available domains and indicators.
+    """
+    models_dir = CURRENT_DIR.parent / "models"
+    model_files = list(models_dir.glob("*.pkl"))
+    
+    metadata = {}
+    
+    # Filename pattern: {domain}_{indicator}.pkl
+    for model_path in model_files:
+        name = model_path.stem
+        # Try to find the domain by splitting
+        # Possible domains: economy, labour, tourism, greek_tourism
+        parts = name.split("_")
+        
+        found_domain = None
+        indicator = None
+        
+        # Priority check for multi-word domains like greek_tourism
+        if name.startswith("greek_tourism_"):
+            found_domain = "greek_tourism"
+            indicator = name[len("greek_tourism_"):]
+        else:
+            # economy_, labour_, tourism_
+            for d in ["economy", "labour", "tourism"]:
+                if name.startswith(f"{d}_"):
+                    found_domain = d
+                    indicator = name[len(f"{d}_"):]
+                    break
+        
+        if found_domain and indicator:
+            if found_domain not in metadata:
+                metadata[found_domain] = []
+            if indicator not in metadata[found_domain]:
+                metadata[found_domain].append(indicator)
+                
+    # Sort for predictability
+    for d in metadata:
+        metadata[d].sort()
+        
+    return metadata

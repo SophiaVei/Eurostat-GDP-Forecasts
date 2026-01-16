@@ -3,15 +3,17 @@
 ## 1. Environment Activation
 The forecasting service requires a connection to a MongoDB instance. 
 
-### Option A: Local Deployment
-Ensure MongoDB is running locally, then execute the following from the root directory:
+### Option A: Local Deployment (No Docker)
+Ensure MongoDB is running locally, then execute from within the `API/` directory:
 ```powershell
-python -m API.main
+# First: cd API
+python main.py
 ```
 
 ### Option B: Docker Deployment (Containerized)
-The following command initializes both the API and a dedicated MongoDB container:
+The API can be started alongside MongoDB using Docker Compose:
 ```powershell
+# From either the Project Root OR the API/ folder
 docker-compose up --build
 ```
 

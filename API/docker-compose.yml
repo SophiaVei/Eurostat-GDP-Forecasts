@@ -1,6 +1,6 @@
 services:
   api:
-    build: ./API
+    build: .
     ports:
       - "8000:8000"
     environment:
@@ -9,7 +9,7 @@ services:
     depends_on:
       - mongodb
     volumes:
-      - ./API:/app # Map API folder to container root
+      - .:/app # Sync local changes for dev
 
   mongodb:
     image: mongo:latest

@@ -16,7 +16,8 @@ COPY requirements.txt .
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the entire project into the container
+# Copy the entire API directory into the container
+# This assumes the Docker context is the /API folder itself
 COPY . .
 
 # Expose port 8000 for the FastAPI app
@@ -28,4 +29,5 @@ ENV DB_NAME=skillscapes
 ENV PYTHONUNBUFFERED=1
 
 # Command to run the application
-CMD ["python", "-m", "API.main"]
+# Since we are inside the API folder, we run main.py as a module relative to /app
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

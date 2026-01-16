@@ -1,11 +1,12 @@
 import pandas as pd
+import datetime
 import sys
 from pathlib import Path
-from ..database import get_database
+from database import get_database
 
-# Import existing logic
+# Import internal logic
 CURRENT_DIR = Path(__file__).resolve().parent
-SRC_DIR = CURRENT_DIR.parent.parent / "src"
+SRC_DIR = CURRENT_DIR.parent / "src_shared"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
@@ -33,8 +34,7 @@ def update_datasets():
     
     # 2. Process and Save
     domains = ['economy', 'labour', 'tourism', 'greek_tourism']
-    repo_dir = SRC_DIR.parent
-    data_dir = repo_dir / "data"
+    data_dir = CURRENT_DIR.parent / "data"
     
     for domain in domains:
         raw_file = data_dir / f"{domain}_nuts2_all_columns.csv"
@@ -60,7 +60,7 @@ def update_datasets():
                     "geo": geo,
                     "type": "history",  # Distinguish from forecasts
                     "data": r,
-                    "updated_at": pd.Timestamp.now()
+                    "updated_at": datetime.datetime.now(datetime.timezone.utc)
                 })
             
             if mongo_docs:
