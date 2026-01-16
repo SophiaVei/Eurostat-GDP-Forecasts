@@ -1,61 +1,55 @@
-# Eurostat Forecast API Service
+# Eurostat Forecast API Service (Stateless)
 
-This directory contains the production-ready FastAPI service for served pre-trained Eurostat forecasting models.
+This directory contains a production-ready, stateless FastAPI service for generating on-demand Eurostat forecasts.
 
 ## 1. Overview
-The service interacts with a MongoDB instance to manage both regional history and future-looking forecasts for four domains: Economy, Labour, Tourism, and Greek Tourism.
+The service generates future-looking forecasts for four domains: **Economy, Labour, Tourism, and Greek Tourism**. 
+
+Unlike a traditional database-backed service, this API is **purely stateless**:
+- It fetches real-time historical data from the Skillscapes API for every request.
+- It performs in-memory preprocessing and inference using pre-trained `.pkl` models.
+- It returns results immediately without requiring a local database (No MongoDB needed).
 
 ## 2. Infrastructure
 - **FastAPI**: Application entry point in `main.py`.
-- **Database**: MongoDB connection management in `database.py`.
 - **Pre-trained Models**: Binary `.pkl` snapshots stored in `models/`.
-- **Business Logic**: ETL and Inference services in the `services/` directory.
+- **In-Memory Logic**: Specialized logic for data ingestion and transformation in `src_shared/`.
+- **Stateless Inference**: Handled via `services/forecast_service.py`.
 
-## 3. Deployment
-The service is now strictly standalone. You can run it in two ways:
+## 3. Quick Start
 
-### Option A: Via Project Root (Shortcut)
-```bash
-# Execute from the project root directory
-docker-compose up --build
-```
-
-### Option B: Standalone Handover (Deployment)
-If you move only this `API/` folder to a new server:
+### Docker Deployment (Recommended)
 ```bash
 cd API
 docker compose up --build
 ```
-The service will be accessible at `http://localhost:8000`.
+The service will be accessible at `http://localhost:8000/docs`.
 
-### 3. Usage & Endpoints
-The following endpoints are available for data management and forecast retrieval:
+### Local Deployment
+```bash
+cd API
+pip install -r requirements.txt
+python main.py
+```
 
-#### Metadata & Discovery
+## 4. Usage & Endpoints
+
+### Metadata & Discovery
 - **GET `/forecast/metadata`**: Lists all available domains and their corresponding indicators.
-- **Domain-Specific Discovery**: Use specialized routes like `/forecast/economy/{indicator}` or `/forecast/labour/{indicator}`. These routes provide **pre-filled dropdown menus** in the Swagger UI for all available indicators within that domain.
 
-#### Data ETL
-- **POST `/data/update`**: Refreshes MongoDB with the latest Eurostat figures.
-- **POST `/forecast/run`**: Generates predictions for the next logical year.
+### On-Demand Forecasting
+Use the domain-specific routes to generate forecasts. These endpoints feature **dropdown menus** in the Swagger UI for both **Indicators** and **NUTS 2 Codes**:
+- **GET `/forecast/economy/{indicator}`**
+- **GET `/forecast/labour/{indicator}`**
+- **GET `/forecast/tourism/{indicator}`**
+- **GET `/forecast/greek_tourism/{indicator}`**
 
-#### Forecast Retrieval
-- **GET `/forecast/economy/{indicator}`**: Returns forecasts for a specific economy indicator (with dropdown).
-- **GET `/forecast/labour/{indicator}`**: Returns forecasts for a specific labour indicator (with dropdown).
-- **GET `/forecast/tourism/{indicator}`**: Returns forecasts for a specific tourism indicator (with dropdown).
-- **GET `/forecast/greek_tourism/{indicator}`**: Returns forecasts for a specific greek_tourism indicator (with dropdown).
-- **GET `/forecast/{domain}`**: Returns all forecasts for a specific domain.
-- **GET `/forecast/{domain}/{indicator}`**: Generic endpoint for all indicators.
+**Optional Parameter**: Add `?nuts_code=EL52` to any request to filter results for a specific region.
 
-## 4. Operation Lifecycle
-Operations are designed for periodic execution (e.g., monthly):
-1. **Data Ingestion**: `POST /data/update` - Refreshes MongoDB with the latest Eurostat figures.
-2. **Inference Execution**: `POST /forecast/run` - Generates predictions for the next logical year.
-3. **Retrieval**: `GET /forecast/{domain}` - Retrieves generated data for consumption.
-
-To update the models (requires the full repository):
+## 5. Maintenance
+To update the underlying models (requires the full repository):
 ```bash
 # From project root
 python src/export_models_to_api.py
 ```
-This script retrains selected models and refreshes the binary snapshots in `API/models/`.
+This script retrains the winner models and refreshes the binary snapshots in `API/models/`.

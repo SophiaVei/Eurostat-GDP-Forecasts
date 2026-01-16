@@ -1,55 +1,62 @@
-# API Operational Instructions
+# API Operational Instructions (Stateless)
 
 ## 1. Environment Activation
-The forecasting service requires a connection to a MongoDB instance. 
 
 ### Option A: Local Deployment (No Docker)
-Ensure MongoDB is running locally, then execute from within the `API/` directory:
+Ensure you are in the `API/` directory:
 ```powershell
-# First: cd API
+cd API
+pip install -r requirements.txt
 python main.py
 ```
 
-### Option B: Docker Deployment (Containerized)
-The API can be started alongside MongoDB using Docker Compose:
+### Option B: Docker Deployment
+The API can be started as a standalone container:
 ```powershell
-# From either the Project Root OR the API/ folder
+cd API
 docker-compose up --build
 ```
 
 ## 2. Standard Workflow
 
-### Phase 1: Data Synchronization
-Refreshes the historical database with the latest available data through the Skillscapes API.
-```powershell
-curl -X POST http://localhost:8000/data/update
-```
-Historical records are stored with the attribute `type: "history"`.
+The API is **fully automated**. There is no need for manual data synchronization or database updates.
 
-### Phase 2: Generating Forecasts
-Runs inference using pre-trained models. This step populates the database with predictions for the next logical year.
-```powershell
-curl -X POST http://localhost:8000/forecast/run
-```
-Predictions are stored with the attribute `type: "forecast"`.
+### Step 1: Discover Available Models
+Check the metadata endpoint to see which indicators are supported for each domain.
+`GET http://localhost:8000/forecast/metadata`
 
-### Phase 3: Data Access
-Forecasts can be retrieved via standard GET requests:
-- **Domain Level**: `GET http://localhost:8000/forecast/labour`
-- **Indicator Level**: `GET http://localhost:8000/forecast/labour/labour_force`
+### Step 2: Request a Forecast
+Request a forecast for a specific indicator. The API will fetch the latest data from the Skillscapes API and generate a prediction for the next year on-the-fly.
 
-## 3. Database Schema Reference
-The MongoDB `skillscapes` database contains domain-specific collections. A typical forecast document follows this structure:
+- **Example**: `GET http://localhost:8000/forecast/economy/gdp_eur_hab`
+
+### Step 3: Filter by Region (Optional)
+You can restrict the forecast to a specific NUTS 2 area by adding the `nuts_code` parameter.
+
+- **Example**: `GET http://localhost:8000/forecast/economy/gdp_eur_hab?nuts_code=EL52`
+
+## 3. Performance & Latency
+Since the API performs real-time data ingestion for every request:
+- **Fetch Time**: The API calls the external Skillscapes service, which can take **5-15 seconds** depending on the volume of historical data.
+- **Inference**: Once data is received, the prediction is generated in under **100ms** (except for heavy models like TimesFM).
+
+## 4. Response Format
+The API returns a JSON object containing the prediction metadata and an array of regional results:
 
 ```json
 {
-  "geo": "EL52",
-  "type": "forecast",
-  "indicator": "labour_force",
-  "year": 2025,
-  "value": 123.45,
-  "model": "Ensemble",
-  "run_at": "2026-01-15T..."
+  "domain": "economy",
+  "indicator": "gdp_eur_hab",
+  "count": 1,
+  "data": [
+    {
+      "geo": "EL52",
+      "indicator": "gdp_eur_hab",
+      "year": 2024,
+      "value": 15600.25,
+      "model": "Tournament_Winner",
+      "run_at": "2026-01-16T..."
+    }
+  ]
 }
 ```
-Records can be inspected directly through MongoDB Compass for manual verification.

@@ -3,7 +3,6 @@ import numpy as np
 import os
 from sklearn.model_selection import train_test_split
 from data_processor import (
-    load_wide_data,
     prepare_indicator_dataset,
     get_base_indicators_from_wide,
     impute_missing_values,
@@ -123,7 +122,7 @@ def run_model_comparison(model_class, model_name, data_file, output_dir, **model
     os.makedirs(plots_dir, exist_ok=True)
     
     # Load preprocessed wide-format data (all models use the same preprocessed file)
-    wide_df = load_wide_data(data_file)
+    wide_df = pd.read_csv(data_file)
     indicators = get_base_indicators_from_wide(wide_df)
     
     comparisons = []
