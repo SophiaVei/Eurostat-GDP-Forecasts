@@ -58,11 +58,15 @@ Accuracy is measured by selecting the most recent year with ground truth (the **
 - **Test Set (20%)**: Retained as unseen data to evaluate performance. The **MAPE (Mean Absolute Percentage Error)** on this set determines the "Winner" for each indicator.
 - **Visualization Examples**: The following plots demonstrate the system's performance on the 20% regional test group, where the **Actual Value (Green Dot)** is compared against the **Forecasted Value (Red X)**.
 
-#### Example: GDP per Inhabitant (Economy Domain)
-![GDP per Inhabitant Forecast](file:///c:/Users/Sofia/Eurostat-GDP-Forecasts/results/economy/ensemble/plots/gdp_eur_hab_forecast.png)
+#### Example 1: GDP per Inhabitant (Economy Domain)
+The following plot demonstrates the performance for `gdp_eur_hab`. During the **Model Tournament**, the **Ensemble** architecture (averaging Ridge and XGBoost) emerged as the winner. Specifically, the **Single-Feature** version achieved a superior MAPE of **3.02%**, outperforming the Multi-Feature configuration. This indicates that historical GDP trends are the primary drivers for this indicator.
 
-#### Example: Total GDP in Millions (Economy Domain)
-![Total GDP Forecast](file:///c:/Users/Sofia/Eurostat-GDP-Forecasts/results/economy/ensemble/plots/gdp_mio_eur_forecast.png)
+![GDP per Inhabitant Forecast](results/economy/ensemble/plots/gdp_eur_hab_forecast.png)
+
+#### Example 2: Total Employees (Labour Domain)
+For the `employees` indicator, the tournament again selected the **Ensemble** model. However, in this case, the **Multi-Feature** configuration proved more accurate (MAPE: **3.72%**) than the Single-Feature version. This highlights the model's ability to leverage correlations from other labour indicators to improve regional employment predictions.
+
+![Total Employees Forecast](results/labour/ensemble/plots/employees_forecast.png)
 
 ### E. Deployment & Inference (Phase 2)
 The production environment uses the **Winners** identified in the evaluation phase:
