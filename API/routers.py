@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 from typing import Literal, Optional
 from services.forecast_service import get_forecasts, get_api_metadata
 from constants import (
@@ -21,7 +21,10 @@ def get_economy_forecast(
     nuts_code: Optional[EconomyNutsCode] = Query(None, description="Optional NUTS 2 code to filter results.")
 ):
     """Retrieve forecasts for specific Economy indicators."""
-    return get_forecasts("economy", indicator, nuts_code)
+    res = get_forecasts("economy", indicator, nuts_code)
+    if isinstance(res, dict) and "error" in res:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
 
 @forecast_router.get("/labour/{indicator}", response_model=ForecastResponse)
 def get_labour_forecast(
@@ -29,7 +32,10 @@ def get_labour_forecast(
     nuts_code: Optional[LabourNutsCode] = Query(None, description="Optional NUTS 2 code to filter results.")
 ):
     """Retrieve forecasts for specific Labour indicators."""
-    return get_forecasts("labour", indicator, nuts_code)
+    res = get_forecasts("labour", indicator, nuts_code)
+    if isinstance(res, dict) and "error" in res:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
 
 @forecast_router.get("/tourism/{indicator}", response_model=ForecastResponse)
 def get_tourism_forecast(
@@ -37,7 +43,10 @@ def get_tourism_forecast(
     nuts_code: Optional[TourismNutsCode] = Query(None, description="Optional NUTS 2 code to filter results.")
 ):
     """Retrieve forecasts for specific Tourism indicators."""
-    return get_forecasts("tourism", indicator, nuts_code)
+    res = get_forecasts("tourism", indicator, nuts_code)
+    if isinstance(res, dict) and "error" in res:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
 
 @forecast_router.get("/greek_tourism/{indicator}", response_model=ForecastResponse)
 def get_greek_tourism_forecast(
@@ -45,4 +54,7 @@ def get_greek_tourism_forecast(
     nuts_code: Optional[GreekTourismNutsCode] = Query(None, description="Optional Greek NUTS 2 code to filter results.")
 ):
     """Retrieve forecasts for specific Greek Tourism indicators."""
-    return get_forecasts("greek_tourism", indicator, nuts_code)
+    res = get_forecasts("greek_tourism", indicator, nuts_code)
+    if isinstance(res, dict) and "error" in res:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
