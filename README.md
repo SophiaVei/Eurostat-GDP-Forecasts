@@ -63,10 +63,20 @@ The following plot demonstrates the performance for `gdp_eur_hab`. During the **
 
 ![GDP per Inhabitant Forecast](results/economy/ensemble/plots/gdp_eur_hab_forecast.png)
 
-#### Example 2: Total Employees (Labour Domain)
-For the `employees` indicator, the tournament again selected the **Ensemble** model. However, in this case, the **Multi-Feature** configuration proved more accurate (MAPE: **3.72%**) than the Single-Feature version. This highlights the model's ability to leverage correlations from other labour indicators to improve regional employment predictions.
+#### Example 2: Involuntary Part-Time Employment % (Labour Domain)
+For the `involuntary_part_time_pct` indicator, the **Model Tournament** identified the **Linear Regression (Ridge)** architecture as the winner. In this instance, the **Single-Feature** configuration achieved a near-perfect MAPE of **0.00%** (specifically 0.002%), demonstrating exceptional precision in capturing the stable historical patterns of this specific metric.
 
-![Total Employees Forecast](results/labour/ensemble/plots/employees_forecast.png)
+![Involuntary Part-Time Forecast](results/labour/linear/plots/involuntary_part_time_pct_forecast.png)
+
+#### Example 3: Nights Spent at Tourist Establishments (Tourism Domain)
+For the `nights_spent` indicator, the **Linear Regression (Ridge)** model with a **Single-Feature** configuration was identified as the winner. It achieved a MAPE of **4.01%**, successfully navigating the significant temporal volatility and seasonality common in regional tourism data.
+
+![Nights Spent Forecast](results/tourism/linear/plots/nights_spent_forecast.png)
+
+#### Example 4: Number of Rooms (Greek Tourism Domain)
+The specialized Greek Tourism dataset benefits significantly from foundation models. For the `rooms` indicator (regional hotel capacity), **TimesFM** outperformed classical models. By processing each series independently with its 2.5B parameter transformer, it achieved a high-precision MAPE of **1.69%**.
+
+![Rooms Forecast](results/greek_tourism/timesfm/plots/rooms_forecast.png)
 
 ### E. Deployment & Inference (Phase 2)
 The production environment uses the **Winners** identified in the evaluation phase:
