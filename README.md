@@ -1,6 +1,6 @@
 # Eurostat Regional Forecasting Framework
 
-This project provides a comprehensive machine learning pipeline designed to forecast regional economic and social indicators across Europe at the NUTS 2 level. The framework covers the entire lifecycle: from multi-domain data extraction and sophisticated preprocessing to comparative model evaluation and high-scale production deployment through FastAPI and Docker.
+This project provides a comprehensive machine learning pipeline designed to forecast regional economic and social indicators across Europe at the NUTS 2 level. The framework covers the entire lifecycle: from multi-domain data extraction to comparative model evaluation and production deployment through FastAPI.
 
 ---
 
