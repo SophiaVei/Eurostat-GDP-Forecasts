@@ -21,8 +21,9 @@ Data is sourced from the official **Skillscapes Eurostat Wrapper API**, providin
 
 The preprocessing engine transforms raw Eurostat data into a robust format for time-series forecasting across approximately 400 regions:
 
-- **Wide-Format Transformation**: Long-format data is pivoted into a cross-sectional wide structure where each row represents a unique **Region (`geo`)** and columns are flattened to **`Indicator_Year`** (e.g., `gdp_mio_eur_2010`).
-- **Linear Interpolation**: To address historical data gaps (missing years within a series), **linear interpolation** is applied. This ensures models process continuous trends rather than disparate "jumps" or zero values.
+- **Wide-Format Transformation**: Long-format Eurostat data is pivoted into a cross-sectional wide structure where each row represents a unique **Region (`geo`)** and columns are flattened to **`Indicator_Year`** (e.g., `gdp_mio_eur_2010`).
+- **Feature Matrix Preparation**: During training, the **`geo`** column is treated strictly as a unique index and is **dropped** from the input feature matrix to prevent the models from "memorizing" specific regional IDs. Only numeric temporal lags are used for prediction.
+- **Linear Interpolation**: To address historical data gaps (missing years within a series), **linear interpolation** is applied across consecutive years. This ensures models process continuous trends.
 - **Static Data Handling**: For indicators with low temporal variance (e.g., "Land Area"), logic is implemented to detect zero-variance histories and override model noise with constant value extensions.
 - **Imputation Strategy**: Remaining missing values are addressed via regional averages or a final zero-fill fallback for system stability.
 
@@ -32,25 +33,38 @@ The preprocessing engine transforms raw Eurostat data into a robust format for t
 
 A **Cross-Regional Training** strategy is utilized. Rather than training isolated models for each region, a single global instance is trained for each indicator across **all regions simultaneously**. This captures broader economic cycles and cross-regional dependencies.
 
-### A. Feature Engineering
-Two distinct feature sets are compared for every indicator:
-- **Single-Feature**: Utilizes only the historical lags of the target indicator.
-- **Multi-Feature**: Incorporates historical lags of the target indicator along with all other indicators within the same domain to capture inter-variable correlations.
+### A. Phase 1: Feature Set Comparison (Single vs. Multi)
+For every model architecture evaluated, the system performs a primary comparison between two feature sets to determine the optimal input scope for each specific indicator:
 
-### B. Predictive Models
-The framework evaluates four primary model architectures:
+- **Single-Feature Forecast**: The model uses **only** the historical lags of the target indicator (e.g., using previous GDP years to predict current GDP). This is effective for indicators with strong, independent self-correlation.
+- **Multi-Feature Forecast**: The model utilizes the lags of the target indicator **plus** the lags of all other indicators in that domain (e.g., using Employment and Sectoral GVA history to predict GDP). This captures inter-variable economic drivers.
+
+### B. Phase 2: Model Tournament & Winner Selection
+The framework employs a "hierarchical selection" process to identify the most accurate production model:
+1. **Intra-Model Selection**: For each model class (e.g., XGBoost, Ridge), the MAPE of the *Single-Feature* version is compared against the *Multi-Feature* version. The superior version is retained as the "Model Candidate."
+2. **Inter-Model Tournament**: The Candidates from all model classes (Ridge, XGBoost, TimesFM, Ensemble) are compared against one another.
+3. **Winner Assignment**: The entry with the overall lowest MAPE across the 20% regional test set is crowned the **Winner** and exported for production.
+
+### C. Predictive Models
+The framework evaluates four primary architectures:
 1. **Linear Regression (Ridge)**: Employs L2 regularization to manage multi-feature dimensionality and prevent overfitting.
 2. **XGBoost**: Gradient Boosting Decision Trees optimized with the `reg:absoluteerror` objective for robustness against outliers.
 3. **TimesFM (Foundation Model)**: Google's 2.5 Billion parameter Time-Series Foundation Model, integrated via a custom regional wrapper.
 4. **Ensemble**: A meta-model that averages predictions from Ridge and XGBoost to reduce predictive variance.
 
-### C. Evaluation Strategy (Phase 1)
+### D. Evaluation Strategy (Phase 1)
 Accuracy is measured by selecting the most recent year with ground truth (the **Evaluation Year**) and splitting the regions:
 - **Training Set (80%)**: Used to train the model and learn regional patterns.
 - **Test Set (20%)**: Retained as unseen data to evaluate performance. The **MAPE (Mean Absolute Percentage Error)** on this set determines the "Winner" for each indicator.
-- **Visualization**: The results plots showcase this 20% Test Set, where the **Actual Value (Green Dot)** is compared against the **Forecasted Value (Red X)**.
+- **Visualization Examples**: The following plots demonstrate the system's performance on the 20% regional test group, where the **Actual Value (Green Dot)** is compared against the **Forecasted Value (Red X)**.
 
-### D. Deployment & Inference (Phase 2)
+#### Example: GDP per Inhabitant (Economy Domain)
+![GDP per Inhabitant Forecast](file:///c:/Users/Sofia/Eurostat-GDP-Forecasts/results/economy/ensemble/plots/gdp_eur_hab_forecast.png)
+
+#### Example: Total GDP in Millions (Economy Domain)
+![Total GDP Forecast](file:///c:/Users/Sofia/Eurostat-GDP-Forecasts/results/economy/ensemble/plots/gdp_mio_eur_forecast.png)
+
+### E. Deployment & Inference (Phase 2)
 The production environment uses the **Winners** identified in the evaluation phase:
 - **Deployment Training**: Models are not "frozen" at the 80% mark. Instead, the `src/export_models_to_api.py` script performs a final training pass on **100% of available regional data**. 
 - **Data Utilization**: By training on the full dataset, the model "swallows" the previously hidden 20% ground truth, ensuring the production model is as informed as possible before forecasting the future.
@@ -90,5 +104,3 @@ The API automates the data lifecycle:
 1. **Experimental Benchmarking**: Execute scripts in `src/` to view MAPE comparisons and performance plots in `results/`.
 2. **Model Deployment**: Execute `python src/export_models_to_api.py` to train and export the winning models to the API.
 3. **Service Activation**: Deploy via Docker: `docker-compose up --build`.
-
-**Technical Note**: This framework is designed for production reliability, ensuring strict separation between experimental results and operational forecasting.
