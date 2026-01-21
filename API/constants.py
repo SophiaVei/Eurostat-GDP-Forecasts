@@ -54,7 +54,7 @@ GreekTourismIndicator = Literal[
     "hotels_foreign_arrivals", "hotels_foreign_overnights", 
     "hotels_total_arrivals", "hotels_total_arrivals_per_km2", 
     "hotels_total_arrivals_per_person", "hotels_total_overnights", 
-    "land_area", "population", "receipts", "rooms", 
+    "population", "receipts", "rooms", 
     "short_stay_total_arrivals", "short_stay_total_arrivals_per_km2", 
     "short_stay_total_arrivals_per_person", "short_stay_total_overnights", 
     "turnover_accommodation", "turnover_catering", "turnover_total", "units"

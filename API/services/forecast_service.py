@@ -152,7 +152,7 @@ def get_forecasts(domain: str, indicator: str, nuts_code: str = None):
             "geo": wide_df_filtered.iloc[i]['geo'],
             "indicator": indicator,
             "year": int(forecast_year),
-            "value": float(val),
+            "value": round(float(val), 2),
             "model": data.get('model_name', 'Unknown'),
             "run_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
         })
