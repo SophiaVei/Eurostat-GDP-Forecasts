@@ -3,11 +3,19 @@ from typing import Literal, Optional
 from services.forecast_service import get_forecasts, get_api_metadata
 from constants import (
     DomainLiteral, EconomyIndicator, LabourIndicator, TourismIndicator, GreekTourismIndicator,
-    EconomyNutsCode, LabourNutsCode, TourismNutsCode, GreekTourismNutsCode
+    EconomyNutsCode, LabourNutsCode, TourismNutsCode, GreekTourismNutsCode,
+    ECONOMY_DESC, LABOUR_DESC, TOURISM_DESC, GREEK_TOURISM_DESC
 )
 from schemas import ForecastResponse
 
 forecast_router = APIRouter(prefix="/forecast", tags=["Forecast"])
+
+def format_indicator_list(desc_dict):
+    """Formats a dictionary into a bulleted list for Swagger docstrings."""
+    bullet_list = "\n\n"
+    for k, v in sorted(desc_dict.items()):
+        bullet_list += f"* **{k}** - {v}\n"
+    return bullet_list
 
 @forecast_router.get("/metadata")
 def get_metadata():
@@ -15,45 +23,57 @@ def get_metadata():
     return get_api_metadata()
 
 # Domain-Specific Routes with specific Indicator and NUTS dropdowns
-@forecast_router.get("/economy/{indicator}", response_model=ForecastResponse)
+@forecast_router.get(
+    "/economy/{indicator}", 
+    response_model=ForecastResponse,
+    description="Retrieve forecasts for specific Economy indicators.\n" + format_indicator_list(ECONOMY_DESC)
+)
 def get_economy_forecast(
     indicator: EconomyIndicator, 
     nuts_code: Optional[EconomyNutsCode] = Query(None, description="Optional NUTS 2 code to filter results.")
 ):
-    """Retrieve forecasts for specific Economy indicators."""
     res = get_forecasts("economy", indicator, nuts_code)
     if isinstance(res, dict) and "error" in res:
         raise HTTPException(status_code=400, detail=res["error"])
     return res
 
-@forecast_router.get("/labour/{indicator}", response_model=ForecastResponse)
+@forecast_router.get(
+    "/labour/{indicator}", 
+    response_model=ForecastResponse,
+    description="Retrieve forecasts for specific Labour indicators.\n" + format_indicator_list(LABOUR_DESC)
+)
 def get_labour_forecast(
     indicator: LabourIndicator, 
     nuts_code: Optional[LabourNutsCode] = Query(None, description="Optional NUTS 2 code to filter results.")
 ):
-    """Retrieve forecasts for specific Labour indicators."""
     res = get_forecasts("labour", indicator, nuts_code)
     if isinstance(res, dict) and "error" in res:
         raise HTTPException(status_code=400, detail=res["error"])
     return res
 
-@forecast_router.get("/tourism/{indicator}", response_model=ForecastResponse)
+@forecast_router.get(
+    "/tourism/{indicator}", 
+    response_model=ForecastResponse,
+    description="Retrieve forecasts for specific Tourism indicators.\n" + format_indicator_list(TOURISM_DESC)
+)
 def get_tourism_forecast(
     indicator: TourismIndicator, 
     nuts_code: Optional[TourismNutsCode] = Query(None, description="Optional NUTS 2 code to filter results.")
 ):
-    """Retrieve forecasts for specific Tourism indicators."""
     res = get_forecasts("tourism", indicator, nuts_code)
     if isinstance(res, dict) and "error" in res:
         raise HTTPException(status_code=400, detail=res["error"])
     return res
 
-@forecast_router.get("/greek_tourism/{indicator}", response_model=ForecastResponse)
+@forecast_router.get(
+    "/greek_tourism/{indicator}", 
+    response_model=ForecastResponse,
+    description="Retrieve forecasts for specific Greek Tourism indicators.\n" + format_indicator_list(GREEK_TOURISM_DESC)
+)
 def get_greek_tourism_forecast(
     indicator: GreekTourismIndicator, 
     nuts_code: Optional[GreekTourismNutsCode] = Query(None, description="Optional Greek NUTS 2 code to filter results.")
 ):
-    """Retrieve forecasts for specific Greek Tourism indicators."""
     res = get_forecasts("greek_tourism", indicator, nuts_code)
     if isinstance(res, dict) and "error" in res:
         raise HTTPException(status_code=400, detail=res["error"])
