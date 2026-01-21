@@ -74,67 +74,82 @@ def get_forecasts(domain: str, indicator: str, nuts_code: str = None):
     if wide_df.empty:
         return {"error": "Data preprocessing failed (empty result)."}
 
+    # Calculate last available year per region from raw_df (pre-imputation)
+    raw_df_copy = raw_df.copy()
+    raw_df_copy["year"] = pd.to_numeric(raw_df_copy["year"], errors='coerce')
+    # Filter rows where target indicator is not null to find the real last year
+    indicator_data = raw_df_copy[raw_df_copy[indicator].notna()]
+    if indicator_data.empty:
+        # Fallback to general years if target indicator is missing everywhere
+        last_years_map = {geo: int(raw_df_copy["year"].max()) for geo in wide_df["geo"]}
+    else:
+        last_years_map = indicator_data.groupby('geo')['year'].max().astype(int).to_dict()
+
     # Handle TimesFM special case
     is_timesfm = "TimesFM" in str(type(model)) or (isinstance(model, str) and model == "TimesFM_Pretrained")
-    
     if is_timesfm and isinstance(model, str):
         if TIMESFM_AVAILABLE:
             model = TimesFMRegionalWrapper(target_prefix=indicator)
         else:
             return {"error": "TimesFM model requested but library not installed in container."}
 
-    # Prepare Inference Input X
-    if is_timesfm:
-        prefix = f"{indicator}_"
-        hist_cols = [c for c in wide_df.columns if c.startswith(prefix) and c[len(prefix):].isdigit()]
-        hist_cols.sort(key=lambda c: int(c.split('_')[-1]))
-        X = wide_df[hist_cols]
-        last_year = int(hist_cols[-1].split('_')[-1])
-        forecast_year = last_year + 1
-    else:
-        # Time Shift Lag Logic
-        train_years = []
-        for f in features:
-             if "_" in f and f.split('_')[-1].isdigit():
-                 train_years.append(int(f.split('_')[-1]))
+    # Prepare Inference Input X and determine Forecast Years per region
+    prefix = f"{indicator}_"
+    
+    # Global fallback for max data year and train input
+    data_years_cols = [int(c.split('_')[-1]) for c in wide_df.columns if c.startswith(prefix) and c[len(prefix):].isdigit()]
+    global_max_data_year = max(data_years_cols) if data_years_cols else 2023
+    
+    train_years = []
+    for f in features:
+        if "_" in f and f.split('_')[-1].isdigit():
+            train_years.append(int(f.split('_')[-1]))
+    max_train_input = max(train_years) if train_years else global_max_data_year
+
+    X_rows = []
+    region_forecast_years = []
+    
+    for _, row in wide_df.iterrows():
+        geo = row['geo']
+        region_last_year = last_years_map.get(geo, global_max_data_year)
+        region_forecast_years.append(int(region_last_year + 1))
         
-        if not train_years:
-            X = pd.DataFrame(0, index=wide_df.index, columns=features)
-            for f in features:
-                if f in wide_df.columns:
-                    X[f] = wide_df[f]
-            forecast_year = datetime.datetime.now().year + 1
+        if is_timesfm:
+            # TimesFM logic: extract indicators in order
+            hist_cols = [c for c in wide_df.columns if c.startswith(prefix) and c[len(prefix):].isdigit()]
+            hist_cols.sort(key=lambda c: int(c.split('_')[-1]))
+            # Note: We currently pass the full history (up to global_max_data_year).
+            # The model wrapper should handle any trailing 0s or we could trim here.
+            X_row = row[hist_cols].to_dict()
         else:
-            max_train_input = max(train_years)
-            prefix = f"{indicator}_"
-            data_years = [int(c.split('_')[-1]) for c in wide_df.columns if c.startswith(prefix) and c[len(prefix):].isdigit()]
-            if not data_years:
-                return {"error": f"No historical data years found for {indicator}."}
-            max_data_year = max(data_years)
-            shift = max_data_year - max_train_input
-            
-            X = pd.DataFrame(index=wide_df.index)
+            # Time Shift Lag Logic
+            shift = region_last_year - max_train_input
+            X_row = {}
             for feat in features:
                 if "_" in feat and feat.split('_')[-1].isdigit():
                     parts = feat.rsplit('_', 1)
-                    base = parts[0]
-                    yr = int(parts[1])
+                    base, yr = parts[0], int(parts[1])
                     target_yr = yr + shift
                     source_col = f"{base}_{target_yr}"
-                    X[feat] = wide_df[source_col] if source_col in wide_df.columns else np.nan
+                    X_row[feat] = row[source_col] if source_col in wide_df.columns else np.nan
                 else:
-                    X[feat] = wide_df[feat] if feat in wide_df.columns else np.nan
-            forecast_year = trained_target_year + shift
+                    X_row[feat] = row[feat] if feat in wide_df.columns else np.nan
+        X_rows.append(X_row)
 
+    X = pd.DataFrame(X_rows)
     X = X.fillna(0)
     
     # Filter by NUTS if requested
     if nuts_code:
+        # Create a boolean mask on the original wide_df to keep indices aligned
         mask = (wide_df['geo'] == nuts_code)
         if not mask.any():
             return {"error": f"NUTS code {nuts_code} not found in the fetched data."}
-        X = X[mask]
+        
+        # Filter everything using the mask
+        X = X[mask.values] # X indices are 0..N, matching wide_df rows
         wide_df_filtered = wide_df[mask]
+        region_forecast_years = [y for i, y in enumerate(region_forecast_years) if mask.iloc[i]]
     else:
         wide_df_filtered = wide_df
 
@@ -151,7 +166,7 @@ def get_forecasts(domain: str, indicator: str, nuts_code: str = None):
         results.append({
             "geo": wide_df_filtered.iloc[i]['geo'],
             "indicator": indicator,
-            "year": int(forecast_year),
+            "year": int(region_forecast_years[i]),
             "value": round(float(val), 2),
             "model": data.get('model_name', 'Unknown'),
             "run_at": datetime.datetime.now(datetime.timezone.utc).isoformat()

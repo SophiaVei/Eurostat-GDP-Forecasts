@@ -319,8 +319,8 @@ with tab1:
         next_val = forecast_df['value'].iloc[0]
         delta = ((next_val - last_val) / last_val) * 100
         
-        m1.metric("Current Value", f"{last_val:,.2f}")
-        m2.metric("Forecast (2024)", f"{next_val:,.2f}", f"{delta:+.2f}%")
+        m1.metric("Last Historical Value", f"{last_val:,.2f}")
+        m2.metric("Forecast", f"{next_val:,.2f}", f"{delta:+.2f}%")
         m3.metric("Prediction Model", model_name)
 
         # Plotly Go Chart
