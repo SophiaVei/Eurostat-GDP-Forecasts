@@ -120,4 +120,4 @@ The API automates the data lifecycle:
 3. **Service Activation**: Deploy via Docker: `docker-compose up --build`.
 
 
-# After deployment, the forecasts are interactively plotted here: (Yearly Eurostat Forecasts per NUTS 2)[https://eurostatforecasts.streamlit.app/]. When data are updated, the plots are automatically updated according to the pretrained models.
+# After deployment, the forecasts are interactively plotted here: [Yearly Eurostat Forecasts per NUTS 2](https://eurostatforecasts.streamlit.app/). When data are updated, the plots are automatically updated according to the pretrained models.
